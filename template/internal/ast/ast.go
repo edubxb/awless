@@ -33,8 +33,10 @@ type AST struct {
 	Statements []*Statement
 
 	// state to build the AST
-	currentStatement *Statement
-	currentKey       string
+	currentStatement       *Statement
+	currentActionStatement *Statement
+	currentKey             string
+	currentListBuilder     *listValueBuilder
 }
 
 type Statement struct {
@@ -82,6 +84,77 @@ func (n *CommandNode) Keys() (keys []string) {
 	}
 
 	return
+}
+
+type ActionNode struct {
+	CmdResult interface{}
+	CmdErr    error
+
+	Action, Entity string
+	Params         map[string]CompositeValue
+}
+
+func (n *ActionNode) Result() interface{} { return n.CmdResult }
+func (n *ActionNode) Err() error          { return n.CmdErr }
+
+func (n *ActionNode) Keys() (keys []string) {
+	for k, p := range n.Params {
+		keys = append(keys, k)
+		keys = append(keys, p.Holes()...)
+		keys = append(keys, p.Refs()...)
+	}
+
+	return
+}
+
+func (n *ActionNode) String() string {
+	var all []string
+
+	for k, v := range n.Params {
+		switch vv := v.(type) {
+		case *listValue:
+			var buff bytes.Buffer
+			for i, val := range vv.vals {
+				switch vval := val.(type) {
+				case *referenceValue:
+					if vval.val != nil {
+						buff.WriteString(printParamValue(vval.val))
+					} else {
+						buff.WriteString(fmt.Sprintf("$%s", vval.ref))
+					}
+				case *holeValue:
+					if vval.val != nil {
+						buff.WriteString(printParamValue(vval.val))
+					} else {
+						buff.WriteString(fmt.Sprintf("{%s}", vval.hole))
+					}
+				case *interfaceValue:
+					buff.WriteString(printParamValue(vval.val))
+				}
+				if i < len(vv.vals)-1 {
+					buff.WriteString(",")
+				}
+			}
+
+			all = append(all, fmt.Sprintf("%s=[%s]", k, buff.String()))
+		}
+	}
+
+	sort.Strings(all)
+
+	var buff bytes.Buffer
+
+	fmt.Fprintf(&buff, "%s %s", n.Action, n.Entity)
+
+	if len(all) > 0 {
+		fmt.Fprintf(&buff, " %s", strings.Join(all, " "))
+	}
+
+	return buff.String()
+}
+
+func (a *ActionNode) clone() Node {
+	return a
 }
 
 type ValueNode struct {

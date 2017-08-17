@@ -26,6 +26,27 @@ import (
 	"github.com/wallix/awless/template/internal/ast"
 )
 
+func TestParseTemplatesWithList(t *testing.T) {
+	tcases := []struct {
+		text string
+	}{
+		{"create loadbalancer subnets=[subnet1,subnet2,subnet3]"},
+		{"create loadbalancer subnets=[$subnet1,$subnet2,$subnet3]"},
+		{"create loadbalancer subnets=[{subnet1},{subnet2},{subnet3}]"},
+	}
+
+	for i, tcase := range tcases {
+		tpl, err := Parse(tcase.text)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if got, want := tpl.String(), tcase.text; !strings.HasSuffix(got, want) {
+			t.Fatalf("%d: parsing [%s]\ngot  [%s]\nwant [%s]\n", i+1, tcase.text, got, want)
+		}
+	}
+}
+
 func TestParseVariousTemplatesCorrectly(t *testing.T) {
 	tcases := []struct {
 		desc string

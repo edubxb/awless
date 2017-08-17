@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net"
 	"strconv"
-	"strings"
 )
 
 func (a *AST) addAction(text string) {
@@ -13,6 +12,7 @@ func (a *AST) addAction(text string) {
 	}
 
 	cmd := &CommandNode{Action: text}
+	action := &ActionNode{Action: text}
 
 	decl := a.currentDeclaration()
 	if decl != nil {
@@ -24,6 +24,13 @@ func (a *AST) addAction(text string) {
 		} else {
 			node.Action = text
 		}
+
+		actionNode := a.currentAction()
+		if actionNode == nil {
+			a.addActionStatement(action)
+		} else {
+			actionNode.Action = text
+		}
 	}
 }
 
@@ -33,6 +40,10 @@ func (a *AST) addEntity(text string) {
 	}
 	node := a.currentCommand()
 	node.Entity = text
+	action := a.currentAction()
+	if action != nil {
+		action.Entity = text
+	}
 }
 
 func (a *AST) addValue() {
@@ -51,6 +62,8 @@ func (a *AST) addDeclarationIdentifier(text string) {
 func (a *AST) LineDone() {
 	a.currentStatement = nil
 	a.currentKey = ""
+	a.currentActionStatement = nil
+	a.currentListBuilder = nil
 }
 
 func (a *AST) addParam(i interface{}) {
@@ -69,6 +82,10 @@ func (a *AST) addParamKey(text string) {
 		node.Params = make(map[string]interface{})
 		node.Holes = make(map[string]string)
 	}
+	action := a.currentAction()
+	if action != nil && action.Params == nil {
+		action.Params = make(map[string]CompositeValue)
+	}
 	a.currentKey = text
 }
 
@@ -77,29 +94,42 @@ func (a *AST) addAliasParam(text string) {
 }
 
 func (a *AST) addParamValue(text string) {
+	var val interface{}
 	i, err := strconv.Atoi(text)
 	if err == nil {
-		a.addParam(i)
+		val = i
 	} else {
 		f, err := strconv.ParseFloat(text, 64)
 		if err == nil {
-			a.addParam(f)
+			val = f
 		} else {
-			a.addParam(text)
+			val = text
+		}
+	}
+	if a.currentListBuilder != nil {
+		a.currentListBuilder.add(&interfaceValue{val: val})
+	} else {
+		a.addParam(val)
+	}
+}
+
+func (a *AST) addFirstValueInList() {
+	a.currentListBuilder = &listValueBuilder{}
+}
+func (a *AST) lastValueInList() {
+	if action := a.currentAction(); action != nil {
+		if a.currentListBuilder != nil {
+			action.Params[a.currentKey] = a.currentListBuilder.build()
 		}
 	}
 }
 
 func (a *AST) addStringValue(text string) {
-	a.addParam(text)
-}
-
-func (a *AST) addCsvValue(text string) {
-	var csv []string
-	for _, val := range strings.Split(text, ",") {
-		csv = append(csv, strings.TrimSpace(val))
+	if a.currentListBuilder != nil {
+		a.currentListBuilder.add(&interfaceValue{val: text})
+	} else {
+		a.addParam(text)
 	}
-	a.addParam(csv)
 }
 
 func (a *AST) addParamFloatValue(text string) {
@@ -107,7 +137,11 @@ func (a *AST) addParamFloatValue(text string) {
 	if err != nil {
 		panic(fmt.Sprintf("cannot convert '%s' to float", text))
 	}
-	a.addParam(num)
+	if a.currentListBuilder != nil {
+		a.currentListBuilder.add(&interfaceValue{val: num})
+	} else {
+		a.addParam(num)
+	}
 }
 
 func (a *AST) addParamIntValue(text string) {
@@ -115,7 +149,11 @@ func (a *AST) addParamIntValue(text string) {
 	if err != nil {
 		panic(fmt.Sprintf("cannot convert '%s' to int", text))
 	}
-	a.addParam(num)
+	if a.currentListBuilder != nil {
+		a.currentListBuilder.add(&interfaceValue{val: num})
+	} else {
+		a.addParam(num)
+	}
 }
 
 func (a *AST) addParamCidrValue(text string) {
@@ -123,7 +161,11 @@ func (a *AST) addParamCidrValue(text string) {
 	if err != nil {
 		panic(fmt.Sprintf("cannot convert '%s' to net cidr", text))
 	}
-	a.addParam(ipnet.String())
+	if a.currentListBuilder != nil {
+		a.currentListBuilder.add(&interfaceValue{val: ipnet.String()})
+	} else {
+		a.addParam(ipnet.String())
+	}
 }
 
 func (a *AST) addParamIpValue(text string) {
@@ -131,21 +173,33 @@ func (a *AST) addParamIpValue(text string) {
 	if ip == nil {
 		panic(fmt.Sprintf("cannot convert '%s' to net ip", text))
 	}
-	a.addParam(ip.String())
+	if a.currentListBuilder != nil {
+		a.currentListBuilder.add(&interfaceValue{val: ip.String()})
+	} else {
+		a.addParam(ip.String())
+	}
 }
 
 func (a *AST) addParamRefValue(text string) {
-	if node := a.currentCommand(); node != nil {
-		node.Refs[a.currentKey] = text
+	if a.currentListBuilder != nil {
+		a.currentListBuilder.add(&referenceValue{ref: text})
+	} else {
+		if node := a.currentCommand(); node != nil {
+			node.Refs[a.currentKey] = text
+		}
 	}
 }
 
 func (a *AST) addParamHoleValue(text string) {
-	if node := a.currentCommand(); node != nil {
-		node.Holes[a.currentKey] = text
+	if a.currentListBuilder != nil {
+		a.currentListBuilder.add(&holeValue{hole: text})
 	} else {
-		varDecl := a.currentDeclarationValue()
-		varDecl.Hole = text
+		if node := a.currentCommand(); node != nil {
+			node.Holes[a.currentKey] = text
+		} else {
+			varDecl := a.currentDeclarationValue()
+			varDecl.Hole = text
+		}
 	}
 }
 
@@ -184,6 +238,27 @@ func (a *AST) currentCommand() *CommandNode {
 	}
 }
 
+func (a *AST) currentAction() *ActionNode {
+	st := a.currentActionStatement
+	if st == nil {
+		return nil
+	}
+
+	switch st.Node.(type) {
+	case *ActionNode:
+		return st.Node.(*ActionNode)
+	case *DeclarationNode:
+		expr := st.Node.(*DeclarationNode).Expr
+		switch expr.(type) {
+		case *ActionNode:
+			return expr.(*ActionNode)
+		}
+		return nil
+	default:
+		return nil
+	}
+}
+
 func (a *AST) currentDeclarationValue() *ValueNode {
 	st := a.currentStatement
 	if st == nil {
@@ -207,4 +282,23 @@ func (a *AST) addStatement(n Node) {
 	stat := &Statement{Node: n}
 	a.currentStatement = stat
 	a.Statements = append(a.Statements, stat)
+}
+
+func (a *AST) addActionStatement(n Node) {
+	stat := &Statement{Node: n}
+	a.currentActionStatement = stat
+	a.Statements = append(a.Statements, stat)
+}
+
+type listValueBuilder struct {
+	vals []CompositeValue
+}
+
+func (c *listValueBuilder) add(v CompositeValue) *listValueBuilder {
+	c.vals = append(c.vals, v)
+	return c
+}
+
+func (c *listValueBuilder) build() CompositeValue {
+	return &listValue{c.vals}
 }

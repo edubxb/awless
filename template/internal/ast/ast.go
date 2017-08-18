@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -111,33 +112,7 @@ func (n *ActionNode) String() string {
 	var all []string
 
 	for k, v := range n.Params {
-		switch vv := v.(type) {
-		case *listValue:
-			var buff bytes.Buffer
-			for i, val := range vv.vals {
-				switch vval := val.(type) {
-				case *referenceValue:
-					if vval.val != nil {
-						buff.WriteString(printParamValue(vval.val))
-					} else {
-						buff.WriteString(fmt.Sprintf("$%s", vval.ref))
-					}
-				case *holeValue:
-					if vval.val != nil {
-						buff.WriteString(printParamValue(vval.val))
-					} else {
-						buff.WriteString(fmt.Sprintf("{%s}", vval.hole))
-					}
-				case *interfaceValue:
-					buff.WriteString(printParamValue(vval.val))
-				}
-				if i < len(vv.vals)-1 {
-					buff.WriteString(",")
-				}
-			}
-
-			all = append(all, fmt.Sprintf("%s=[%s]", k, buff.String()))
-		}
+		all = append(all, fmt.Sprintf("%s=%s", k, v.String()))
 	}
 
 	sort.Strings(all)
@@ -155,6 +130,25 @@ func (n *ActionNode) String() string {
 
 func (a *ActionNode) clone() Node {
 	return a
+}
+
+func (a *ActionNode) ProcessHoles(fills map[string]interface{}) map[string]interface{} {
+	processed := make(map[string]interface{})
+
+	for _, param := range a.Params {
+		paramProcessed := param.ProcessHoles(fills)
+		for k, v := range paramProcessed {
+			processed[a.Entity+"."+k] = v
+		}
+	}
+	return processed
+}
+
+func (a *ActionNode) GetHoles() (holes []string) {
+	for _, param := range a.Params {
+		holes = append(holes, param.GetHoles()...)
+	}
+	return
 }
 
 type ValueNode struct {
@@ -333,6 +327,12 @@ func (a *AST) Clone() *AST {
 var SimpleStringValue = regexp.MustCompile("^[a-zA-Z0-9-._:/+;~@<>*]+$") // in sync with [a-zA-Z0-9-._:/+;~@<>]+ in PEG (with ^ and $ around)
 
 func quoteStringIfNeeded(input string) string {
+	if _, err := strconv.Atoi(input); err == nil {
+		return "'" + input + "'"
+	}
+	if _, err := strconv.ParseFloat(input, 64); err == nil {
+		return "'" + input + "'"
+	}
 	if SimpleStringValue.MatchString(input) {
 		return input
 	} else {

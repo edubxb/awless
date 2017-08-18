@@ -33,6 +33,9 @@ func TestParseTemplatesWithList(t *testing.T) {
 		{"create loadbalancer subnets=[subnet1,subnet2,subnet3]"},
 		{"create loadbalancer subnets=[$subnet1,$subnet2,$subnet3]"},
 		{"create loadbalancer subnets=[{subnet1},{subnet2},{subnet3}]"},
+		{"create loadbalancer name=mylb subnets=[sub-1234,sub-2345]"},
+		{"create loadbalancer name=mylb subnets=[sub-1234,$subnet2,{subnet3}]"},
+		{"create loadbalancer name=mylb subnets=[@mysubnet,$subnet2,{subnet3}]"},
 	}
 
 	for i, tcase := range tcases {

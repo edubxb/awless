@@ -148,6 +148,12 @@ func (s *Template) visitCommandNodes(fn func(n *ast.CommandNode)) {
 	}
 }
 
+func (s *Template) visitActionNodes(fn func(n *ast.ActionNode)) {
+	for _, action := range s.ActionNodesIterator() {
+		fn(action)
+	}
+}
+
 func (s *Template) visitCommandNodesE(fn func(n *ast.CommandNode) error) error {
 	for _, cmd := range s.CommandNodesIterator() {
 		if err := fn(cmd); err != nil {
@@ -181,6 +187,16 @@ func (s *Template) CommandNodesIterator() (nodes []*ast.CommandNode) {
 			case *ast.CommandNode:
 				nodes = append(nodes, expr.(*ast.CommandNode))
 			}
+		}
+	}
+	return
+}
+
+func (s *Template) ActionNodesIterator() (nodes []*ast.ActionNode) {
+	for _, sts := range s.Statements {
+		switch nn := sts.Node.(type) {
+		case *ast.ActionNode:
+			nodes = append(nodes, nn)
 		}
 	}
 	return
@@ -230,6 +246,8 @@ func (s *Template) expressionNodesIterator() (nodes []ast.ExpressionNode) {
 		case *ast.DeclarationNode:
 			nodes = append(nodes, n.Expr)
 		case *ast.CommandNode:
+			nodes = append(nodes, n)
+		case *ast.ActionNode:
 			nodes = append(nodes, n)
 		}
 	}

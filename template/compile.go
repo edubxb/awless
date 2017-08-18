@@ -318,29 +318,53 @@ func resolveMissingHolesPass(tpl *Template, env *Env) (*Template, *Env, error) {
 
 func resolveAliasPass(tpl *Template, env *Env) (*Template, *Env, error) {
 	var emptyResolv []string
-	each := func(cmd *ast.CommandNode) {
-		for k, v := range cmd.Params {
-			if s, ok := v.(string); ok {
-				if strings.HasPrefix(s, "@") {
-					env.Log.ExtraVerbosef("alias: resolving %s for key %s", s, k)
-					alias := strings.TrimPrefix(s, "@")
-					if env.AliasFunc == nil {
-						continue
-					}
-					actual := env.AliasFunc(cmd.Entity, k, alias)
-					if actual == "" {
-						emptyResolv = append(emptyResolv, alias)
-					} else {
-						env.Log.ExtraVerbosef("alias: resolved '%s' to '%s' for key %s", alias, actual, k)
-						cmd.Params[k] = actual
-						delete(cmd.Holes, k)
-					}
+	resolvAliasFunc := func(key, entity string, i interface{}) (string, bool) {
+		if s, ok := i.(string); ok {
+			if strings.HasPrefix(s, "@") {
+				env.Log.ExtraVerbosef("alias: resolving %s for key %s", s, key)
+				alias := strings.TrimPrefix(s, "@")
+				if env.AliasFunc == nil {
+					return "", false
+				}
+				actual := env.AliasFunc(entity, key, alias)
+				if actual == "" {
+					emptyResolv = append(emptyResolv, alias)
+					return "", false
+				} else {
+					env.Log.ExtraVerbosef("alias: resolved '%s' to '%s' for key %s", alias, actual, key)
+					return actual, true
 				}
 			}
 		}
+		return "", false
 	}
 
-	tpl.visitCommandNodes(each)
+	tpl.visitCommandNodes(func(cmd *ast.CommandNode) {
+		for k, v := range cmd.Params {
+			if resolved, ok := resolvAliasFunc(k, cmd.Entity, v); ok {
+				cmd.Params[k] = resolved
+				delete(cmd.Holes, k)
+			}
+		}
+	})
+
+	tpl.visitActionNodes(func(action *ast.ActionNode) {
+		for k, v := range action.Params {
+			if vv, ok := v.(ast.WithAlias); ok {
+				resolvAliasFunc := func(alias string) string {
+					actual := env.AliasFunc(action.Entity, k, alias)
+					if actual == "" {
+						emptyResolv = append(emptyResolv, alias)
+						return ""
+					} else {
+						env.Log.ExtraVerbosef("alias: resolved '%s' to '%s' for key %s", alias, actual, k)
+						return actual
+					}
+				}
+				vv.ResolveAlias(resolvAliasFunc)
+			}
+		}
+	})
 
 	if len(emptyResolv) > 0 {
 		return tpl, env, fmt.Errorf("cannot resolve aliases: %q. Maybe you need to update your local model with `awless sync` ?", emptyResolv)

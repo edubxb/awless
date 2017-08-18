@@ -9,43 +9,60 @@ import (
 )
 
 func TestWholeCompilation(t *testing.T) {
-	env := NewEnv()
-
-	env.AddFillers(map[string]interface{}{
-		"instance.type":  "t2.micro",
-		"test.cidr":      "10.0.2.0/24",
-		"instance.count": 42,
-		"unused":         "filler",
-	})
-	env.AliasFunc = func(e, k, v string) string {
-		vals := map[string]string{
-			"vpc": "vpc-1234",
-		}
-		return vals[v]
-	}
-	env.DefLookupFunc = func(in string) (Definition, bool) {
-		t, ok := DefsExample[in]
-		return t, ok
-	}
-
 	tcases := []struct {
-		tpl    string
-		expect string
+		tpl                 string
+		expect              string
+		expProcessedFillers map[string]interface{}
 	}{
 		{
-			`subnetname = my-subnet
+			tpl: `subnetname = my-subnet
 vpcref=@vpc
 testsubnet = create subnet cidr={test.cidr} vpc=$vpcref name=$subnetname
 update subnet id=$testsubnet public=true
 instancecount = {instance.count}
 create instance subnet=$testsubnet image=ami-12345 count=$instancecount name='my test instance'`,
-			`testsubnet = create subnet cidr=10.0.2.0/24 name=my-subnet vpc=vpc-1234
+			expect: `testsubnet = create subnet cidr=10.0.2.0/24 name=my-subnet vpc=vpc-1234
 update subnet id=$testsubnet public=true
 create instance count=42 image=ami-12345 name='my test instance' subnet=$testsubnet type=t2.micro`,
+			expProcessedFillers: map[string]interface{}{"instance.type": "t2.micro", "subnet.cidr": "10.0.2.0/24", "instance.count": 42},
+		},
+		{
+			tpl: `
+create loadbalancer subnets=[sub-1234, sub-2345,@subalias,@subalias] name=mylb
+sub1 = create subnet cidr={test.cidr} vpc=@vpc name=subnet1
+sub2 = create subnet cidr=10.0.3.0/24 vpc=@vpc name=subnet2
+create loadbalancer subnets=[$sub1, $sub2, sub-3456,{backup-subnet}] name=mylb2
+`,
+			expect: `create loadbalancer name=mylb subnets=[sub-1234,sub-2345,sub-1111,sub-1111]
+sub1 = create subnet cidr=10.0.2.0/24 name=subnet1 vpc=vpc-1234
+sub2 = create subnet cidr=10.0.3.0/24 name=subnet2 vpc=vpc-1234
+create loadbalancer name=mylb2 subnets=[$sub1,$sub2,sub-3456,sub-0987]`,
+			expProcessedFillers: map[string]interface{}{"subnet.cidr": "10.0.2.0/24", "loadbalancer.backup-subnet": "sub-0987"},
 		},
 	}
 
 	for i, tcase := range tcases {
+		env := NewEnv()
+
+		env.AddFillers(map[string]interface{}{
+			"instance.type":  "t2.micro",
+			"test.cidr":      "10.0.2.0/24",
+			"instance.count": 42,
+			"unused":         "filler",
+			"backup-subnet":  "sub-0987",
+		})
+		env.AliasFunc = func(e, k, v string) string {
+			vals := map[string]string{
+				"vpc":      "vpc-1234",
+				"subalias": "sub-1111",
+			}
+			return vals[v]
+		}
+		env.DefLookupFunc = func(in string) (Definition, bool) {
+			t, ok := DefsExample[in]
+			return t, ok
+		}
+
 		inTpl := MustParse(tcase.tpl)
 
 		pass := newMultiPass(NormalCompileMode...)
@@ -62,8 +79,7 @@ create instance count=42 image=ami-12345 name='my test instance' subnet=$testsub
 			t.Fatalf("%d: got\n%s\nwant\n%s", i+1, got, want)
 		}
 
-		expProcessedFillers := map[string]interface{}{"instance.type": "t2.micro", "subnet.cidr": "10.0.2.0/24", "instance.count": 42}
-		if got, want := env.GetProcessedFillers(), expProcessedFillers; !reflect.DeepEqual(got, want) {
+		if got, want := env.GetProcessedFillers(), tcase.expProcessedFillers; !reflect.DeepEqual(got, want) {
 			t.Fatalf("got %v, want %v", got, want)
 		}
 	}

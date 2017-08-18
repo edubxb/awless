@@ -98,7 +98,19 @@ func (a *AST) addParamKey(text string) {
 }
 
 func (a *AST) addAliasParam(text string) {
-	a.addParam("@" + text)
+	if a.currentListBuilder != nil {
+		a.currentListBuilder.add(&aliasValue{alias: text})
+	} else {
+		if node := a.currentCommand(); node != nil {
+			node.Params[a.currentKey] = "@" + text
+		} else {
+			varDecl := a.currentDeclarationValue()
+			varDecl.Value = "@" + text
+		}
+		if action := a.currentAction(); action != nil {
+			action.Params[a.currentKey] = &aliasValue{alias: text}
+		}
+	}
 }
 
 func (a *AST) addParamValue(text string) {
@@ -196,6 +208,9 @@ func (a *AST) addParamRefValue(text string) {
 		if node := a.currentCommand(); node != nil {
 			node.Refs[a.currentKey] = text
 		}
+		if action := a.currentAction(); action != nil {
+			action.Params[a.currentKey] = &referenceValue{ref: text}
+		}
 	}
 }
 
@@ -208,6 +223,9 @@ func (a *AST) addParamHoleValue(text string) {
 		} else {
 			varDecl := a.currentDeclarationValue()
 			varDecl.Hole = text
+		}
+		if action := a.currentAction(); action != nil {
+			action.Params[a.currentKey] = &holeValue{hole: text}
 		}
 	}
 }

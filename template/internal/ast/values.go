@@ -1,8 +1,8 @@
 package ast
 
 type CompositeValue interface {
-	Holes() []string
-	Refs() []string
+	WithHoles
+	GetRefs() []string
 	Value() interface{}
 }
 
@@ -14,16 +14,16 @@ type listValue struct {
 	vals []CompositeValue
 }
 
-func (l *listValue) Holes() (res []string) {
+func (l *listValue) GetHoles() (res []string) {
 	for _, val := range l.vals {
-		res = append(res, val.Holes()...)
+		res = append(res, val.GetHoles()...)
 	}
 	return
 }
 
-func (l *listValue) Refs() (res []string) {
+func (l *listValue) GetRefs() (res []string) {
 	for _, val := range l.vals {
-		res = append(res, val.Refs()...)
+		res = append(res, val.GetRefs()...)
 	}
 	return
 }
@@ -38,15 +38,26 @@ func (l *listValue) Value() interface{} {
 	return res
 }
 
+func (l *listValue) ProcessHoles(fills map[string]interface{}) map[string]interface{} {
+	processed := make(map[string]interface{})
+	for _, val := range l.vals {
+		valProc := val.ProcessHoles(fills)
+		for k, v := range valProc {
+			processed[k] = v
+		}
+	}
+	return processed
+}
+
 type interfaceValue struct {
 	val interface{}
 }
 
-func (i *interfaceValue) Holes() (res []string) {
+func (i *interfaceValue) GetHoles() (res []string) {
 	return
 }
 
-func (i *interfaceValue) Refs() (res []string) {
+func (i *interfaceValue) GetRefs() (res []string) {
 	return
 }
 
@@ -54,16 +65,23 @@ func (i *interfaceValue) Value() interface{} {
 	return i.val
 }
 
+func (i *interfaceValue) ProcessHoles(map[string]interface{}) map[string]interface{} {
+	return make(map[string]interface{})
+}
+
 type holeValue struct {
 	hole string
 	val  interface{}
 }
 
-func (h *holeValue) Holes() []string {
-	return []string{h.hole}
+func (h *holeValue) GetHoles() (res []string) {
+	if h.val == nil {
+		res = append(res, h.hole)
+	}
+	return
 }
 
-func (h *holeValue) Refs() (res []string) {
+func (h *holeValue) GetRefs() (res []string) {
 	return
 }
 
@@ -71,19 +89,31 @@ func (h *holeValue) Value() interface{} {
 	return h.val
 }
 
+func (h *holeValue) ProcessHoles(fills map[string]interface{}) map[string]interface{} {
+	processed := make(map[string]interface{})
+	if fill, ok := fills[h.hole]; ok {
+		h.val = fill
+		processed[h.hole] = fill
+	}
+	return processed
+}
+
 type referenceValue struct {
 	ref string
 	val interface{}
 }
 
-func (r *referenceValue) Holes() (res []string) {
+func (r *referenceValue) GetHoles() (res []string) {
 	return
 }
 
-func (r *referenceValue) Refs() []string {
+func (r *referenceValue) GetRefs() []string {
 	return []string{r.ref}
 }
 
 func (r *referenceValue) Value() interface{} {
 	return r.val
+}
+func (l *referenceValue) ProcessHoles(map[string]interface{}) map[string]interface{} {
+	return make(map[string]interface{})
 }

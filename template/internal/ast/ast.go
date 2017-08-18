@@ -100,8 +100,8 @@ func (n *ActionNode) Err() error          { return n.CmdErr }
 func (n *ActionNode) Keys() (keys []string) {
 	for k, p := range n.Params {
 		keys = append(keys, k)
-		keys = append(keys, p.Holes()...)
-		keys = append(keys, p.Refs()...)
+		keys = append(keys, p.GetHoles()...)
+		keys = append(keys, p.GetRefs()...)
 	}
 
 	return

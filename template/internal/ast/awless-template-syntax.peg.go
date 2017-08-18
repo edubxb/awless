@@ -1095,6 +1095,9 @@ func (p *Peg) Init() {
 						if !_rules[ruleValue]() {
 							goto l106
 						}
+						if !_rules[ruleWhiteSpacing]() {
+							goto l106
+						}
 					l109:
 						{
 							position110, tokenIndex110 := position, tokenIndex
@@ -1106,6 +1109,9 @@ func (p *Peg) Init() {
 								goto l110
 							}
 							if !_rules[ruleValue]() {
+								goto l110
+							}
+							if !_rules[ruleWhiteSpacing]() {
 								goto l110
 							}
 							goto l109
@@ -1136,7 +1142,7 @@ func (p *Peg) Init() {
 			position, tokenIndex = position103, tokenIndex103
 			return false
 		},
-		/* 11 ListValue <- <(Action7 '[' WhiteSpacing Value (',' WhiteSpacing Value)* ']' Action8)> */
+		/* 11 ListValue <- <(Action7 '[' WhiteSpacing Value WhiteSpacing (',' WhiteSpacing Value WhiteSpacing)* ']' Action8)> */
 		nil,
 		/* 12 NoRefValue <- <((AliasValue Action10) / (DoubleQuote CustomTypedValue DoubleQuote) / (SingleQuote CustomTypedValue SingleQuote) / CustomTypedValue / ((&('\'') (SingleQuote <SingleQuotedValue> Action12 SingleQuote)) | (&('"') (DoubleQuote <DoubleQuotedValue> Action11 DoubleQuote)) | (&('{') (HoleValue Action9)) | (&('*' | '+' | '-' | '.' | '/' | '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | ':' | ';' | '<' | '>' | '@' | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' | 'L' | 'M' | 'N' | 'O' | 'P' | 'Q' | 'R' | 'S' | 'T' | 'U' | 'V' | 'W' | 'X' | 'Y' | 'Z' | '_' | 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j' | 'k' | 'l' | 'm' | 'n' | 'o' | 'p' | 'q' | 'r' | 's' | 't' | 'u' | 'v' | 'w' | 'x' | 'y' | 'z' | '~') (<OtherParamValue> Action13))))> */
 		nil,

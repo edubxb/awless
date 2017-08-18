@@ -489,21 +489,21 @@ func TestTemplateParsing(t *testing.T) {
 				},
 			},
 			{
-				input: `create vpc array=test1,test2, 20 , my-array-elem4 ip=127.0.0.1`,
+				input: `create vpc array=[test1,test2, 20 , my-array-elem4] ip=127.0.0.1`,
 				verifyFn: func(n ast.Node) error {
-					return assertParams(n, map[string]interface{}{"array": []string{"test1", "test2", "20", "my-array-elem4"}, "ip": "127.0.0.1"})
+					return assertActionParams(n, map[string]interface{}{"array": []interface{}{"test1", "test2", 20, "my-array-elem4"}, "ip": "127.0.0.1"})
 				},
 			},
 			{
-				input: `create vpc array="test1,test2, 20 , my-array-elem4" ip="127.0.0.1"`,
+				input: `create vpc array=["test1","test2", "20" , "my-array-elem4"] ip="127.0.0.1"`,
 				verifyFn: func(n ast.Node) error {
-					return assertParams(n, map[string]interface{}{"array": []string{"test1", "test2", "20", "my-array-elem4"}, "ip": "127.0.0.1"})
+					return assertActionParams(n, map[string]interface{}{"array": []interface{}{"test1", "test2", "20", "my-array-elem4"}, "ip": "127.0.0.1"})
 				},
 			},
 			{
-				input: `create vpc array='test1,test2, 20 , my-array-elem4' ip='127.0.0.1'`,
+				input: `create vpc array=['test1','test2', '20' , 'my-array-elem4'] ip='127.0.0.1'`,
 				verifyFn: func(n ast.Node) error {
-					return assertParams(n, map[string]interface{}{"array": []string{"test1", "test2", "20", "my-array-elem4"}, "ip": "127.0.0.1"})
+					return assertActionParams(n, map[string]interface{}{"array": []interface{}{"test1", "test2", "20", "my-array-elem4"}, "ip": "127.0.0.1"})
 				},
 			},
 			{
@@ -732,6 +732,23 @@ func assertParams(n ast.Node, expected map[string]interface{}) error {
 	return compare(cmd.Params, expected)
 }
 
+func assertActionParams(n ast.Node, expected map[string]interface{}) error {
+	action := extractActionNode(n)
+	if got, want := len(action.Params), len(expected); got != want {
+		return fmt.Errorf("got %d params (%#v), want %d params (%#v)", got, action.Params, want, expected)
+	}
+	for key, expVal := range expected {
+		nodeVal, ok := action.Params[key]
+		if !ok {
+			return fmt.Errorf("param '%s' missing in action params.", key)
+		}
+		if got, want := nodeVal.Value(), expVal; !reflect.DeepEqual(got, want) {
+			return fmt.Errorf("param '%s': got %#v, want %#v", key, got, want)
+		}
+	}
+	return nil
+}
+
 func assertRefs(n ast.Node, expected map[string]string) error {
 	compare := func(got, want map[string]string) error {
 		if !reflect.DeepEqual(got, want) {
@@ -838,6 +855,26 @@ func extractCommandNode(n ast.Node) *ast.CommandNode {
 		switch expr.(type) {
 		case *ast.CommandNode:
 			return expr.(*ast.CommandNode)
+		default:
+			panic(msg(expr))
+		}
+	default:
+		panic(msg(n))
+	}
+}
+
+func extractActionNode(n ast.Node) *ast.ActionNode {
+	msg := func(i interface{}) string {
+		return fmt.Sprintf("extracting node: want ActionNode, got %T", i)
+	}
+	switch n.(type) {
+	case *ast.ActionNode:
+		return n.(*ast.ActionNode)
+	case *ast.DeclarationNode:
+		expr := n.(*ast.DeclarationNode).Expr
+		switch expr.(type) {
+		case *ast.ActionNode:
+			return expr.(*ast.ActionNode)
 		default:
 			panic(msg(expr))
 		}

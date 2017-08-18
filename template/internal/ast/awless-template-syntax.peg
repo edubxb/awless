@@ -27,8 +27,8 @@ Identifier <- [a-zA-Z0-9-_.]+
 
 CompositeValue <- ListValue / Value
 
-ListValue <- {  p.addFirstValueInList() } '[' WhiteSpacing Value 
-            (',' WhiteSpacing Value )* ']' {  p.lastValueInList() }
+ListValue <- {  p.addFirstValueInList() } '[' WhiteSpacing Value WhiteSpacing
+            (',' WhiteSpacing Value WhiteSpacing )* ']' {  p.lastValueInList() }
 
 NoRefValue <- HoleValue {  p.addParamHoleValue(text) }
         / AliasValue {  p.addAliasParam(text) }

@@ -60,6 +60,11 @@ func (a *AST) addDeclarationIdentifier(text string) {
 }
 
 func (a *AST) LineDone() {
+	if currentAction := a.currentAction(); a.currentActionStatement != nil && a.currentActionStatement.Node != nil && currentAction != nil && a.actionNodeContainsList(currentAction) {
+		a.Statements = append(a.Statements, a.currentActionStatement)
+	} else if a.currentStatement != nil && a.currentStatement.Node != nil {
+		a.Statements = append(a.Statements, a.currentStatement)
+	}
 	a.currentStatement = nil
 	a.currentKey = ""
 	a.currentActionStatement = nil
@@ -72,6 +77,9 @@ func (a *AST) addParam(i interface{}) {
 	} else {
 		varDecl := a.currentDeclarationValue()
 		varDecl.Value = i
+	}
+	if action := a.currentAction(); action != nil {
+		action.Params[a.currentKey] = &interfaceValue{val: i}
 	}
 }
 
@@ -122,6 +130,7 @@ func (a *AST) lastValueInList() {
 			action.Params[a.currentKey] = a.currentListBuilder.build()
 		}
 	}
+	a.currentListBuilder = nil
 }
 
 func (a *AST) addStringValue(text string) {
@@ -259,6 +268,15 @@ func (a *AST) currentAction() *ActionNode {
 	}
 }
 
+func (a *AST) actionNodeContainsList(action *ActionNode) bool {
+	for _, p := range action.Params {
+		if _, ok := p.(*listValue); ok {
+			return true
+		}
+	}
+	return false
+}
+
 func (a *AST) currentDeclarationValue() *ValueNode {
 	st := a.currentStatement
 	if st == nil {
@@ -281,13 +299,11 @@ func (a *AST) currentDeclarationValue() *ValueNode {
 func (a *AST) addStatement(n Node) {
 	stat := &Statement{Node: n}
 	a.currentStatement = stat
-	a.Statements = append(a.Statements, stat)
 }
 
 func (a *AST) addActionStatement(n Node) {
 	stat := &Statement{Node: n}
 	a.currentActionStatement = stat
-	a.Statements = append(a.Statements, stat)
 }
 
 type listValueBuilder struct {

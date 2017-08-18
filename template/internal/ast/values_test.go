@@ -47,12 +47,26 @@ func TestCompositeValues(t *testing.T) {
 	}
 
 	for i, tcase := range tcases {
-		tcase.val.ProcessHoles(tcase.holesFillers)
-		if got, want := tcase.val.GetHoles(), tcase.expHoles; !reflect.DeepEqual(got, want) {
-			t.Fatalf("%d: holes: got %#v, want %#v", i+1, got, want)
+		if withHoles, ok := tcase.val.(WithHoles); ok {
+			withHoles.ProcessHoles(tcase.holesFillers)
 		}
-		if got, want := tcase.val.GetRefs(), tcase.expRefs; !reflect.DeepEqual(got, want) {
-			t.Fatalf("%d: refs: got %#v, want %#v", i+1, got, want)
+		if len(tcase.expHoles) > 0 {
+			withHoles, ok := tcase.val.(WithHoles)
+			if !ok {
+				t.Fatalf("%d: holes: expect value to implement `WithHoles`", i+1)
+			}
+			if got, want := withHoles.GetHoles(), tcase.expHoles; !reflect.DeepEqual(got, want) {
+				t.Fatalf("%d: holes: got %#v, want %#v", i+1, got, want)
+			}
+		}
+		if len(tcase.expRefs) > 0 {
+			withRefs, ok := tcase.val.(WithRefs)
+			if !ok {
+				t.Fatalf("%d: refs: expect value to implement `WithRefs`", i+1)
+			}
+			if got, want := withRefs.GetRefs(), tcase.expRefs; !reflect.DeepEqual(got, want) {
+				t.Fatalf("%d: refs: got %#v, want %#v", i+1, got, want)
+			}
 		}
 		if len(tcase.expAliases) > 0 {
 			aliasVal, ok := tcase.val.(WithAlias)

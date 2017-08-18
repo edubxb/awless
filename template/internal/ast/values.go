@@ -6,10 +6,17 @@ import (
 )
 
 type CompositeValue interface {
-	WithHoles
 	String() string
-	GetRefs() []string
 	Value() interface{}
+}
+
+type WithRefs interface {
+	GetRefs() []string
+}
+
+type WithAlias interface {
+	GetAliases() []string
+	ResolveAlias(func(string) string)
 }
 
 func NewCompositeValue(values ...CompositeValue) CompositeValue {
@@ -22,14 +29,18 @@ type listValue struct {
 
 func (l *listValue) GetHoles() (res []string) {
 	for _, val := range l.vals {
-		res = append(res, val.GetHoles()...)
+		if withHoles, ok := val.(WithHoles); ok {
+			res = append(res, withHoles.GetHoles()...)
+		}
 	}
 	return
 }
 
 func (l *listValue) GetRefs() (res []string) {
 	for _, val := range l.vals {
-		res = append(res, val.GetRefs()...)
+		if withRefs, ok := val.(WithRefs); ok {
+			res = append(res, withRefs.GetRefs()...)
+		}
 	}
 	return
 }
@@ -47,9 +58,11 @@ func (l *listValue) Value() interface{} {
 func (l *listValue) ProcessHoles(fills map[string]interface{}) map[string]interface{} {
 	processed := make(map[string]interface{})
 	for _, val := range l.vals {
-		valProc := val.ProcessHoles(fills)
-		for k, v := range valProc {
-			processed[k] = v
+		if withHoles, ok := val.(WithHoles); ok {
+			valProc := withHoles.ProcessHoles(fills)
+			for k, v := range valProc {
+				processed[k] = v
+			}
 		}
 	}
 	return processed
@@ -90,20 +103,8 @@ type interfaceValue struct {
 	val interface{}
 }
 
-func (i *interfaceValue) GetHoles() (res []string) {
-	return
-}
-
-func (i *interfaceValue) GetRefs() (res []string) {
-	return
-}
-
 func (i *interfaceValue) Value() interface{} {
 	return i.val
-}
-
-func (i *interfaceValue) ProcessHoles(map[string]interface{}) map[string]interface{} {
-	return make(map[string]interface{})
 }
 
 func (i *interfaceValue) String() string {
@@ -119,10 +120,6 @@ func (h *holeValue) GetHoles() (res []string) {
 	if h.val == nil {
 		res = append(res, h.hole)
 	}
-	return
-}
-
-func (h *holeValue) GetRefs() (res []string) {
 	return
 }
 
@@ -147,30 +144,13 @@ func (h *holeValue) String() string {
 	}
 }
 
-type WithAlias interface {
-	GetAliases() []string
-	ResolveAlias(func(string) string)
-}
-
 type aliasValue struct {
 	alias string
 	val   interface{}
 }
 
-func (a *aliasValue) GetHoles() (res []string) {
-	return
-}
-
-func (a *aliasValue) GetRefs() (res []string) {
-	return
-}
-
 func (a *aliasValue) Value() interface{} {
 	return a.val
-}
-
-func (a *aliasValue) ProcessHoles(fills map[string]interface{}) map[string]interface{} {
-	return make(map[string]interface{})
 }
 
 func (a *aliasValue) String() string {
@@ -194,20 +174,12 @@ type referenceValue struct {
 	val interface{}
 }
 
-func (r *referenceValue) GetHoles() (res []string) {
-	return
-}
-
 func (r *referenceValue) GetRefs() []string {
 	return []string{r.ref}
 }
 
 func (r *referenceValue) Value() interface{} {
 	return r.val
-}
-
-func (r *referenceValue) ProcessHoles(map[string]interface{}) map[string]interface{} {
-	return make(map[string]interface{})
 }
 
 func (r *referenceValue) String() string {

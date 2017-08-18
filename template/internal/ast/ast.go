@@ -101,8 +101,12 @@ func (n *ActionNode) Err() error          { return n.CmdErr }
 func (n *ActionNode) Keys() (keys []string) {
 	for k, p := range n.Params {
 		keys = append(keys, k)
-		keys = append(keys, p.GetHoles()...)
-		keys = append(keys, p.GetRefs()...)
+		if withHole, ok := p.(WithHoles); ok {
+			keys = append(keys, withHole.GetHoles()...)
+		}
+		if withRefs, ok := p.(WithRefs); ok {
+			keys = append(keys, withRefs.GetRefs()...)
+		}
 	}
 
 	return
@@ -136,9 +140,11 @@ func (a *ActionNode) ProcessHoles(fills map[string]interface{}) map[string]inter
 	processed := make(map[string]interface{})
 
 	for _, param := range a.Params {
-		paramProcessed := param.ProcessHoles(fills)
-		for k, v := range paramProcessed {
-			processed[a.Entity+"."+k] = v
+		if withHoles, ok := param.(WithHoles); ok {
+			paramProcessed := withHoles.ProcessHoles(fills)
+			for k, v := range paramProcessed {
+				processed[a.Entity+"."+k] = v
+			}
 		}
 	}
 	return processed
@@ -146,7 +152,9 @@ func (a *ActionNode) ProcessHoles(fills map[string]interface{}) map[string]inter
 
 func (a *ActionNode) GetHoles() (holes []string) {
 	for _, param := range a.Params {
-		holes = append(holes, param.GetHoles()...)
+		if withHoles, ok := param.(WithHoles); ok {
+			holes = append(holes, withHoles.GetHoles()...)
+		}
 	}
 	return
 }

@@ -77,7 +77,11 @@ func (s *Template) Run(env *Env) (*Template, error) {
 					return current, err
 				}
 				vars[ident] = cmd.Result()
+			default:
+				return current, fmt.Errorf("unknown type of node: %T", expr)
 			}
+		default:
+			return current, fmt.Errorf("unknown type of node: %T", clone.Node)
 		}
 	}
 

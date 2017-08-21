@@ -9,6 +9,7 @@ func TestCompositeValues(t *testing.T) {
 	tcases := []struct {
 		val          CompositeValue
 		holesFillers map[string]interface{}
+		refsFillers  map[string]interface{}
 		expHoles     []string
 		expRefs      []string
 		expAliases   []string
@@ -40,15 +41,18 @@ func TestCompositeValues(t *testing.T) {
 				&holeValue{hole: "myhole"},
 				&referenceValue{ref: "myref"},
 			),
+			refsFillers:  map[string]interface{}{"myref": "refvalue"},
 			holesFillers: map[string]interface{}{"myhole": "my-value"},
-			expRefs:      []string{"myref"},
-			expValue:     []interface{}{"test", 10, "my-value"},
+			expValue:     []interface{}{"test", 10, "my-value", "refvalue"},
 		},
 	}
 
 	for i, tcase := range tcases {
 		if withHoles, ok := tcase.val.(WithHoles); ok {
 			withHoles.ProcessHoles(tcase.holesFillers)
+		}
+		if withRefs, ok := tcase.val.(WithRefs); ok {
+			withRefs.ProcessRefs(tcase.refsFillers)
 		}
 		if len(tcase.expHoles) > 0 {
 			withHoles, ok := tcase.val.(WithHoles)

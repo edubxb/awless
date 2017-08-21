@@ -12,6 +12,7 @@ type CompositeValue interface {
 
 type WithRefs interface {
 	GetRefs() []string
+	ProcessRefs(map[string]interface{})
 }
 
 type WithAlias interface {
@@ -66,6 +67,14 @@ func (l *listValue) ProcessHoles(fills map[string]interface{}) map[string]interf
 		}
 	}
 	return processed
+}
+
+func (l *listValue) ProcessRefs(fills map[string]interface{}) {
+	for _, val := range l.vals {
+		if withRefs, ok := val.(WithRefs); ok {
+			withRefs.ProcessRefs(fills)
+		}
+	}
 }
 
 func (l *listValue) String() string {
@@ -176,6 +185,12 @@ type referenceValue struct {
 
 func (r *referenceValue) GetRefs() []string {
 	return []string{r.ref}
+}
+
+func (r *referenceValue) ProcessRefs(fills map[string]interface{}) {
+	if fill, ok := fills[r.ref]; ok {
+		r.val = fill
+	}
 }
 
 func (r *referenceValue) Value() interface{} {

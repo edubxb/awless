@@ -41,36 +41,29 @@ func (s *Template) Run(env *Env) (*Template, error) {
 	for _, sts := range s.Statements {
 		clone := sts.Clone()
 		current.Statements = append(current.Statements, clone)
-		switch clone.Node.(type) {
+		switch n := clone.Node.(type) {
 		case *ast.CommandNode:
-			cmd := clone.Node.(*ast.CommandNode)
-			fn, err := env.Driver.Lookup(cmd.Action, cmd.Entity)
-			if err != nil {
+			if err := runCommand(n, env, vars); err != nil {
 				return current, err
 			}
-			cmd.ProcessRefs(vars)
-
-			ctx := driver.NewContext(env.ResolvedReferences)
-			if cmd.CmdResult, cmd.CmdErr = fn(ctx, cmd.Params); cmd.CmdErr != nil {
-				return current, nil
+		case *ast.ActionNode:
+			if err := runAction(n, env, vars); err != nil {
+				return current, err
 			}
 		case *ast.DeclarationNode:
-			ident := clone.Node.(*ast.DeclarationNode).Ident
-			expr := clone.Node.(*ast.DeclarationNode).Expr
-			switch expr.(type) {
+			ident := n.Ident
+			expr := n.Expr
+			switch cmd := expr.(type) {
 			case *ast.CommandNode:
-				cmd := expr.(*ast.CommandNode)
-				fn, err := env.Driver.Lookup(cmd.Action, cmd.Entity)
-				if err != nil {
+				if err := runCommand(cmd, env, vars); err != nil {
 					return current, err
 				}
-				cmd.ProcessRefs(vars)
-
-				ctx := driver.NewContext(env.ResolvedReferences)
-				if cmd.CmdResult, cmd.CmdErr = fn(ctx, cmd.Params); cmd.CmdErr != nil {
-					return current, nil
-				}
 				vars[ident] = cmd.CmdResult
+			case *ast.ActionNode:
+				if err := runAction(cmd, env, vars); err != nil {
+					return current, err
+				}
+				vars[ident] = cmd.Result()
 			}
 		}
 	}
@@ -132,6 +125,30 @@ func (t *Template) UniqueDefinitions(fn DefinitionLookupFunc) (definitions Defin
 	}
 
 	return
+}
+
+func runCommand(n *ast.CommandNode, env *Env, vars map[string]interface{}) error {
+	fn, err := env.Driver.Lookup(n.Action, n.Entity)
+	if err != nil {
+		return err
+	}
+	n.ProcessRefs(vars)
+
+	ctx := driver.NewContext(env.ResolvedReferences)
+	n.CmdResult, n.CmdErr = fn(ctx, n.Params)
+	return nil
+}
+
+func runAction(n *ast.ActionNode, env *Env, vars map[string]interface{}) error {
+	fn, err := env.Driver.Lookup(n.Action, n.Entity)
+	if err != nil {
+		return err
+	}
+	n.ProcessRefs(vars)
+
+	ctx := driver.NewContext(env.ResolvedReferences)
+	n.CmdResult, n.CmdErr = fn(ctx, n.ToDriverParams())
+	return nil
 }
 
 func (s *Template) visitHoles(fn func(n ast.WithHoles)) {

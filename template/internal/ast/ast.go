@@ -159,6 +159,22 @@ func (a *ActionNode) GetHoles() (holes []string) {
 	return
 }
 
+func (a *ActionNode) ProcessRefs(refs map[string]interface{}) {
+	for _, param := range a.Params {
+		if withRef, ok := param.(WithRefs); ok {
+			withRef.ProcessRefs(refs)
+		}
+	}
+}
+
+func (a *ActionNode) ToDriverParams() map[string]interface{} {
+	params := make(map[string]interface{})
+	for k, v := range a.Params {
+		params[k] = v.Value()
+	}
+	return params
+}
+
 type ValueNode struct {
 	Value interface{}
 	Hole  string

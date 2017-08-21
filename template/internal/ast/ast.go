@@ -133,7 +133,15 @@ func (n *ActionNode) String() string {
 }
 
 func (a *ActionNode) clone() Node {
-	return a
+	action := &ActionNode{
+		Action: a.Action, Entity: a.Entity,
+		Params: make(map[string]CompositeValue),
+	}
+
+	for k, v := range a.Params {
+		action.Params[k] = v.Clone()
+	}
+	return action
 }
 
 func (a *ActionNode) ProcessHoles(fills map[string]interface{}) map[string]interface{} {

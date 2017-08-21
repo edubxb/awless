@@ -8,6 +8,7 @@ import (
 type CompositeValue interface {
 	String() string
 	Value() interface{}
+	Clone() CompositeValue
 }
 
 type WithRefs interface {
@@ -105,7 +106,14 @@ func (l *listValue) ResolveAlias(resolvFunc func(string) string) {
 			alias.ResolveAlias(resolvFunc)
 		}
 	}
+}
 
+func (l *listValue) Clone() CompositeValue {
+	clone := &listValue{}
+	for _, val := range l.vals {
+		clone.vals = append(clone.vals, val.Clone())
+	}
+	return clone
 }
 
 type interfaceValue struct {
@@ -118,6 +126,10 @@ func (i *interfaceValue) Value() interface{} {
 
 func (i *interfaceValue) String() string {
 	return printParamValue(i.val)
+}
+
+func (i *interfaceValue) Clone() CompositeValue {
+	return &interfaceValue{val: i.val}
 }
 
 type holeValue struct {
@@ -153,6 +165,10 @@ func (h *holeValue) String() string {
 	}
 }
 
+func (h *holeValue) Clone() CompositeValue {
+	return &holeValue{val: h.val, hole: h.hole}
+}
+
 type aliasValue struct {
 	alias string
 	val   interface{}
@@ -176,6 +192,10 @@ func (a *aliasValue) GetAliases() []string {
 
 func (a *aliasValue) ResolveAlias(resolvFunc func(string) string) {
 	a.val = resolvFunc(a.alias)
+}
+
+func (a *aliasValue) Clone() CompositeValue {
+	return &aliasValue{val: a.val, alias: a.alias}
 }
 
 type referenceValue struct {
@@ -203,4 +223,8 @@ func (r *referenceValue) String() string {
 	} else {
 		return fmt.Sprintf("$%s", r.ref)
 	}
+}
+
+func (r *referenceValue) Clone() CompositeValue {
+	return &referenceValue{val: r.val, ref: r.ref}
 }

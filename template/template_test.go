@@ -223,6 +223,61 @@ create loadbalancer subnets=[$subnet1,sub-1234]`)
 			t.Fatal(err)
 		}
 	})
+
+	t.Run("Driver stops when there is an error on a statement", func(t *testing.T) {
+		s, err := Parse(`subnet1 = create subnet name=mysubnet
+create instance name=instance-with-error
+create vpc name=never-achieved`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		errorMsg := "can not create instance"
+		mDriver := &mockDriver{t: t, prefix: "mynew", expects: []*expectation{
+			{action: "create", entity: "subnet", expectedParams: map[string]interface{}{"name": "mysubnet"}},
+			{action: "create", entity: "instance", expectedParams: map[string]interface{}{"name": "instance-with-error"}, errorToReturn: errors.New(errorMsg)},
+			{action: "create", entity: "vpc", expectedParams: map[string]interface{}{"name": "never-achieved"}},
+		},
+		}
+		env := &Env{Driver: mDriver}
+		if _, err := s.Run(env); err != nil {
+			t.Fatal(err)
+		}
+		if expect := mDriver.expects[0]; !expect.lookupDone {
+			t.Fatalf("expect %s %s done, got %t", expect.action, expect.entity, expect.lookupDone)
+		}
+		if expect := mDriver.expects[1]; !expect.lookupDone {
+			t.Fatalf("expect %s %s done, got %t", expect.action, expect.entity, expect.lookupDone)
+		}
+		if expect := mDriver.expects[2]; expect.lookupDone {
+			t.Fatalf("expect %s %s not done, got %t", expect.action, expect.entity, expect.lookupDone)
+		}
+	})
+
+	t.Run("Dryrun and run are performed on cloned template", func(t *testing.T) {
+		tplText := `subnet1 = create subnet name=mysubnet
+create instance list=[test,test2] name=myinstance subnet=$subnet1
+create vpc name=myvpc subnet=$subnet1`
+		s, err := Parse(tplText)
+		if err != nil {
+			t.Fatal(err)
+		}
+		mDriver := &mockDriver{t: t, prefix: "mynew", expects: []*expectation{
+			{action: "create", entity: "subnet", expectedParams: map[string]interface{}{"name": "mysubnet"}},
+			{action: "create", entity: "instance", expectedParams: map[string]interface{}{"name": "myinstance", "subnet": "mynewsubnet", "list": []interface{}{"test", "test2"}}},
+			{action: "create", entity: "vpc", expectedParams: map[string]interface{}{"name": "myvpc", "subnet": "mynewsubnet"}},
+		},
+		}
+		env := &Env{Driver: mDriver}
+		if err := s.DryRun(env); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.Run(env); err != nil {
+			t.Fatal(err)
+		}
+		if got, want := s.String(), tplText; got != want {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	})
 }
 func TestGetTemplateUniqueDefinitions(t *testing.T) {
 	text := "create instance name=nemo\ncreate keypair name=mykey\ncreate tag key=mine\ncreate instance\ncreate keypair"
@@ -252,6 +307,7 @@ type expectation struct {
 	lookupDone     bool
 	action, entity string
 	expectedParams map[string]interface{}
+	errorToReturn  error
 }
 
 type mockDriver struct {
@@ -279,7 +335,7 @@ func (r *mockDriver) Lookup(lookups ...string) (driver.DriverFn, error) {
 				if got, want := expect.expectedParams, params; !reflect.DeepEqual(got, want) {
 					r.t.Fatalf("[%s %s] params mismatch: expected %v, got %v", expect.action, expect.entity, got, want)
 				}
-				return r.prefix + expect.entity, nil
+				return r.prefix + expect.entity, expect.errorToReturn
 			}, nil
 		}
 	}

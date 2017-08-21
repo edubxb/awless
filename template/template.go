@@ -18,6 +18,7 @@ package template
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -44,10 +45,16 @@ func (s *Template) Run(env *Env) (*Template, error) {
 		switch n := clone.Node.(type) {
 		case *ast.CommandNode:
 			if err := runCommand(n, env, vars); err != nil {
+				if err == driverFunctionFailedErr {
+					return current, nil
+				}
 				return current, err
 			}
 		case *ast.ActionNode:
 			if err := runAction(n, env, vars); err != nil {
+				if err == driverFunctionFailedErr {
+					return current, nil
+				}
 				return current, err
 			}
 		case *ast.DeclarationNode:
@@ -56,11 +63,17 @@ func (s *Template) Run(env *Env) (*Template, error) {
 			switch cmd := expr.(type) {
 			case *ast.CommandNode:
 				if err := runCommand(cmd, env, vars); err != nil {
+					if err == driverFunctionFailedErr {
+						return current, nil
+					}
 					return current, err
 				}
 				vars[ident] = cmd.CmdResult
 			case *ast.ActionNode:
 				if err := runAction(cmd, env, vars); err != nil {
+					if err == driverFunctionFailedErr {
+						return current, nil
+					}
 					return current, err
 				}
 				vars[ident] = cmd.Result()
@@ -127,6 +140,8 @@ func (t *Template) UniqueDefinitions(fn DefinitionLookupFunc) (definitions Defin
 	return
 }
 
+var driverFunctionFailedErr = errors.New("Driver function call failed")
+
 func runCommand(n *ast.CommandNode, env *Env, vars map[string]interface{}) error {
 	fn, err := env.Driver.Lookup(n.Action, n.Entity)
 	if err != nil {
@@ -136,6 +151,9 @@ func runCommand(n *ast.CommandNode, env *Env, vars map[string]interface{}) error
 
 	ctx := driver.NewContext(env.ResolvedReferences)
 	n.CmdResult, n.CmdErr = fn(ctx, n.Params)
+	if n.CmdErr != nil {
+		return driverFunctionFailedErr
+	}
 	return nil
 }
 
@@ -148,6 +166,9 @@ func runAction(n *ast.ActionNode, env *Env, vars map[string]interface{}) error {
 
 	ctx := driver.NewContext(env.ResolvedReferences)
 	n.CmdResult, n.CmdErr = fn(ctx, n.ToDriverParams())
+	if n.CmdErr != nil {
+		return driverFunctionFailedErr
+	}
 	return nil
 }
 

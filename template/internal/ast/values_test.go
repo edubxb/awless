@@ -118,3 +118,42 @@ func TestCompositeValuesStringer(t *testing.T) {
 		}
 	}
 }
+
+func TestCloneValues(t *testing.T) {
+	tcases := []struct {
+		from       CompositeValue
+		mutationFn func(CompositeValue)
+	}{
+		{from: &interfaceValue{val: "test"}, mutationFn: func(v CompositeValue) { v.(*interfaceValue).val = "other" }},
+		{from: &holeValue{hole: "myhole"}, mutationFn: func(v CompositeValue) { v.(*holeValue).ProcessHoles(map[string]interface{}{"myhole": "myvalue"}) }},
+		{from: &referenceValue{ref: "myref"}, mutationFn: func(v CompositeValue) { v.(*referenceValue).ProcessRefs(map[string]interface{}{"myref": "myvalue"}) }},
+		{from: &aliasValue{alias: "myalias"}, mutationFn: func(v CompositeValue) {
+			v.(*aliasValue).ResolveAlias(func(s string) string {
+				if s == "myalias" {
+					return "myvalue"
+				}
+				return ""
+			})
+		}},
+		{
+			from: NewCompositeValue(
+				&interfaceValue{val: "test"},
+				&interfaceValue{val: 10},
+				&holeValue{hole: "myhole"},
+				&referenceValue{ref: "myref"},
+				&aliasValue{alias: "myalias"},
+			),
+			mutationFn: func(v CompositeValue) { v.(*listValue).ProcessHoles(map[string]interface{}{"myhole": "myvalue"}) }},
+	}
+	for i, tcase := range tcases {
+		clone := tcase.from.Clone()
+		tcase.mutationFn(tcase.from)
+		if reflect.DeepEqual(clone.Value(), tcase.from.Value()) {
+			t.Fatalf("%d: expect original and clone values to be different, got %#v", i, clone.Value())
+		}
+		tcase.mutationFn(clone)
+		if !reflect.DeepEqual(clone.Value(), tcase.from.Value()) {
+			t.Fatalf("%d: expect original and clone values to have the same value, got %#v and %#v", i, clone.Value(), tcase.from.Value())
+		}
+	}
+}

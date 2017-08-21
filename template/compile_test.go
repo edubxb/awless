@@ -37,7 +37,20 @@ create loadbalancer subnets=[$sub1, $sub2, sub-3456,{backup-subnet}] name=mylb2
 sub1 = create subnet cidr=10.0.2.0/24 name=subnet1 vpc=vpc-1234
 sub2 = create subnet cidr=10.0.3.0/24 name=subnet2 vpc=vpc-1234
 create loadbalancer name=mylb2 subnets=[$sub1,$sub2,sub-3456,sub-0987]`,
-			expProcessedFillers: map[string]interface{}{"subnet.cidr": "10.0.2.0/24", "loadbalancer.backup-subnet": "sub-0987"},
+			expProcessedFillers: map[string]interface{}{"subnet.cidr": "10.0.2.0/24", "backup-subnet": "sub-0987"},
+		},
+		{
+			tpl: `
+lb0 = create loadbalancer subnets=[sub-1234, sub-2345,@subalias,@subalias] name=mylb
+sub1 = create subnet cidr={test.cidr} vpc=@vpc name=subnet1
+sub2 = create subnet cidr=10.0.3.0/24 vpc=@vpc name=subnet2
+lb1 = create loadbalancer subnets=[$sub1, $sub2, sub-3456,{backup-subnet}] name=mylb2
+`,
+			expect: `lb0 = create loadbalancer name=mylb subnets=[sub-1234,sub-2345,sub-1111,sub-1111]
+sub1 = create subnet cidr=10.0.2.0/24 name=subnet1 vpc=vpc-1234
+sub2 = create subnet cidr=10.0.3.0/24 name=subnet2 vpc=vpc-1234
+lb1 = create loadbalancer name=mylb2 subnets=[$sub1,$sub2,sub-3456,sub-0987]`,
+			expProcessedFillers: map[string]interface{}{"subnet.cidr": "10.0.2.0/24", "backup-subnet": "sub-0987"},
 		},
 	}
 
@@ -68,9 +81,6 @@ create loadbalancer name=mylb2 subnets=[$sub1,$sub2,sub-3456,sub-0987]`,
 		pass := newMultiPass(NormalCompileMode...)
 
 		compiled, _, err := pass.compile(inTpl, env)
-		if err != nil {
-			t.Fatal(err)
-		}
 		if err != nil {
 			t.Fatalf("%d: %s", i+1, err)
 		}

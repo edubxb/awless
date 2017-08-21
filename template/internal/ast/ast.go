@@ -143,7 +143,7 @@ func (a *ActionNode) ProcessHoles(fills map[string]interface{}) map[string]inter
 		if withHoles, ok := param.(WithHoles); ok {
 			paramProcessed := withHoles.ProcessHoles(fills)
 			for k, v := range paramProcessed {
-				processed[a.Entity+"."+k] = v
+				processed[k] = v
 			}
 		}
 	}

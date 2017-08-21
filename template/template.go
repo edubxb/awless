@@ -197,6 +197,12 @@ func (s *Template) ActionNodesIterator() (nodes []*ast.ActionNode) {
 		switch nn := sts.Node.(type) {
 		case *ast.ActionNode:
 			nodes = append(nodes, nn)
+		case *ast.DeclarationNode:
+			expr := sts.Node.(*ast.DeclarationNode).Expr
+			switch expr.(type) {
+			case *ast.ActionNode:
+				nodes = append(nodes, expr.(*ast.ActionNode))
+			}
 		}
 	}
 	return

@@ -12,21 +12,21 @@ func (a *AST) addAction(text string) {
 	}
 
 	cmd := &CommandNode{Action: text}
-	action := &ActionNode{Action: text}
-
-	decl := a.currentDeclaration()
-	if decl != nil {
+	if decl := a.currentDeclaration(); decl != nil {
 		decl.Expr = cmd
 	} else {
-		node := a.currentCommand()
-		if node == nil {
+		if node := a.currentCommand(); node == nil {
 			a.addStatement(cmd)
 		} else {
 			node.Action = text
 		}
+	}
 
-		actionNode := a.currentAction()
-		if actionNode == nil {
+	action := &ActionNode{Action: text}
+	if actionDecl := a.currentActionDeclaration(); actionDecl != nil {
+		actionDecl.Expr = action
+	} else {
+		if actionNode := a.currentAction(); actionNode == nil {
 			a.addActionStatement(action)
 		} else {
 			actionNode.Action = text
@@ -38,10 +38,10 @@ func (a *AST) addEntity(text string) {
 	if IsInvalidEntity(text) {
 		panic(fmt.Errorf("unknown entity '%s'", text))
 	}
-	node := a.currentCommand()
-	node.Entity = text
-	action := a.currentAction()
-	if action != nil {
+	if node := a.currentCommand(); node != nil {
+		node.Entity = text
+	}
+	if action := a.currentAction(); action != nil {
 		action.Entity = text
 	}
 }
@@ -56,11 +56,16 @@ func (a *AST) addValue() {
 }
 
 func (a *AST) addDeclarationIdentifier(text string) {
-	a.addStatement(&DeclarationNode{Ident: text})
+	decl := &DeclarationNode{Ident: text}
+	stat := &Statement{Node: decl}
+	a.currentStatement = stat
+	actionDecl := &DeclarationNode{Ident: text}
+	actionStat := &Statement{Node: actionDecl}
+	a.currentActionStatement = actionStat
 }
 
 func (a *AST) LineDone() {
-	if currentAction := a.currentAction(); a.currentActionStatement != nil && a.currentActionStatement.Node != nil && currentAction != nil && a.actionNodeContainsList(currentAction) {
+	if currentAction := a.currentAction(); currentAction != nil && a.actionNodeContainsList(currentAction) {
 		a.Statements = append(a.Statements, a.currentActionStatement)
 	} else if a.currentStatement != nil && a.currentStatement.Node != nil {
 		a.Statements = append(a.Statements, a.currentStatement)
@@ -74,8 +79,7 @@ func (a *AST) LineDone() {
 func (a *AST) addParam(i interface{}) {
 	if node := a.currentCommand(); node != nil {
 		node.Params[a.currentKey] = i
-	} else {
-		varDecl := a.currentDeclarationValue()
+	} else if varDecl := a.currentDeclarationValue(); varDecl != nil {
 		varDecl.Value = i
 	}
 	if action := a.currentAction(); action != nil {
@@ -84,14 +88,13 @@ func (a *AST) addParam(i interface{}) {
 }
 
 func (a *AST) addParamKey(text string) {
-	node := a.currentCommand()
-	if node.Params == nil {
+	if node := a.currentCommand(); node != nil && node.Params == nil {
 		node.Refs = make(map[string]string)
 		node.Params = make(map[string]interface{})
 		node.Holes = make(map[string]string)
 	}
-	action := a.currentAction()
-	if action != nil && action.Params == nil {
+
+	if action := a.currentAction(); action != nil && action.Params == nil {
 		action.Params = make(map[string]CompositeValue)
 	}
 	a.currentKey = text
@@ -220,8 +223,7 @@ func (a *AST) addParamHoleValue(text string) {
 	} else {
 		if node := a.currentCommand(); node != nil {
 			node.Holes[a.currentKey] = text
-		} else {
-			varDecl := a.currentDeclarationValue()
+		} else if varDecl := a.currentDeclarationValue(); varDecl != nil {
 			varDecl.Hole = text
 		}
 		if action := a.currentAction(); action != nil {
@@ -232,6 +234,20 @@ func (a *AST) addParamHoleValue(text string) {
 
 func (a *AST) currentDeclaration() *DeclarationNode {
 	st := a.currentStatement
+	if st == nil {
+		return nil
+	}
+
+	switch st.Node.(type) {
+	case *DeclarationNode:
+		return st.Node.(*DeclarationNode)
+	}
+
+	return nil
+}
+
+func (a *AST) currentActionDeclaration() *DeclarationNode {
+	st := a.currentActionStatement
 	if st == nil {
 		return nil
 	}
